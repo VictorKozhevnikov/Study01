@@ -1,10 +1,3 @@
-import express from "express";
-import { routes } from "./routes";
+import {app} from './app';
 
-const server = express();
-
-server.use(express.json());
-server.use(routes);
-
-server.listen(3000);
-
+app.listen(3000);
