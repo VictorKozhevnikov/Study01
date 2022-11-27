@@ -38,20 +38,26 @@ interface Section {
   to: IATACode;
 }
 interface Path {
+  totalDistance: number;
+  totalFlights: number;
   sections: Section[];
 }
 
 function tracePath(node: Node): Path {
   const length = node.hops;
   const sections = new Array<Section>(length);
-  for (let i = length - 1; i >= 0 && node.prev !== null; --i) {
+  for (let i = length - 1, nd = node; i >= 0 && nd.prev !== null; --i) {
     sections[i] = {
-      from: node.prev.code,
-      to: node.code,
+      from: nd.prev.code,
+      to: nd.code,
     };
-    node = node.prev;
+    nd = nd.prev;
   }
-  return { sections };
+  return {
+    totalDistance: node.distance,
+    totalFlights: node.hops, 
+    sections 
+  };
 }
 
 export type DistanceFunction = (
@@ -91,6 +97,11 @@ export function findShortestPath(
     if (node.hops < maxHops) {
       // explore connections
       const connections = flightMap[node.code];
+
+      if (!connections) {
+        continue;
+      }
+
       connections.forEach((nextCode) => {
         if (visitedNodes[nextCode]) {
           return;
@@ -99,19 +110,23 @@ export function findShortestPath(
         let nextNode = discoveredNodes[nextCode];
         if (!nextNode) {
           const nextAirport = airports[nextCode];
-          nextNode = {
-            code: nextCode,
-            airport: nextAirport,
-            prev: node,
-            distance: calculateDistance(
-              node.airport.coordinates,
-              nextAirport.coordinates
-            ),
-            hops: node.hops + 1,
-          };
 
-          discoveredNodes[nextCode] = nextNode;
-          queue.unshift(nextNode);
+          // the airport may not be in the dataset
+          if (nextAirport) {
+            nextNode = {
+              code: nextCode,
+              airport: nextAirport,
+              prev: node,
+              distance: calculateDistance(
+                node.airport.coordinates,
+                nextAirport.coordinates
+              ),
+              hops: node.hops + 1,
+            };
+
+            discoveredNodes[nextCode] = nextNode;
+            queue.unshift(nextNode);
+          }
         } else {
           const distance = calculateDistance(
             node.airport.coordinates,
@@ -132,6 +147,6 @@ export function findShortestPath(
       return tracePath(node);
     }
   }
-  
+
   return null;
 }
