@@ -1,4 +1,10 @@
-import { AirportMap, FlightMap, findShortestPath } from "./flights";
+import {
+  AirportMap,
+  FlightMap,
+  findShortestPath,
+  Path,
+  Airport,
+} from "./flights";
 import { Coordinates } from "./calculateCoordinatesDistance";
 
 function euclideanDistance(
@@ -33,22 +39,41 @@ const flightMap: FlightMap = {
 };
 
 describe("findShortestPath", () => {
-  it("should find the shortest path", () => {
-    const path = findShortestPath(
-      { from: "A", to: "G", maxHops: 10 },
-      {
-        airports,
-        flightMap,
-        calculateDistance: euclideanDistance,
-      }
-    );
+  describe("when the path exists", () => {
+    let path: Path | null;
 
-    expect(path?.sections).toEqual([
-      { from: "A", to: "B" },
-      { from: "B", to: "E" },
-      { from: "E", to: "F" },
-      { from: "F", to: "G" },
-    ]);
+    beforeEach(() => {
+      path = findShortestPath(
+        { from: "A", to: "G", maxHops: 10 },
+        {
+          airports,
+          flightMap,
+          calculateDistance: euclideanDistance,
+        }
+      );
+    });
+
+    it("should find the shortest path", () => {
+      expect(path?.sections).toEqual([
+        { from: "A", to: "B" },
+        { from: "B", to: "E" },
+        { from: "E", to: "F" },
+        { from: "F", to: "G" },
+      ]);
+    });
+
+    it("should compute total distance", () => {
+      expect(path?.totalDistance).toEqual(
+        euclideanDistance(airports.A.coordinates, airports.B.coordinates) +
+          euclideanDistance(airports.B.coordinates, airports.E.coordinates) +
+          euclideanDistance(airports.E.coordinates, airports.F.coordinates) +
+          euclideanDistance(airports.F.coordinates, airports.G.coordinates)
+      );
+    });
+
+    it("should compute number of flights", () => {
+      expect(path?.totalFlights).toEqual(4);
+    });
   });
 
   it("should not exceed maximum hops", () => {

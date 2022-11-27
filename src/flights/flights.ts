@@ -37,7 +37,7 @@ interface Section {
   from: IATACode;
   to: IATACode;
 }
-interface Path {
+export interface Path {
   totalDistance: number;
   totalFlights: number;
   sections: Section[];
@@ -117,7 +117,7 @@ export function findShortestPath(
               code: nextCode,
               airport: nextAirport,
               prev: node,
-              distance: calculateDistance(
+              distance: node.distance +  calculateDistance(
                 node.airport.coordinates,
                 nextAirport.coordinates
               ),
@@ -128,13 +128,13 @@ export function findShortestPath(
             queue.unshift(nextNode);
           }
         } else {
-          const distance = calculateDistance(
+          const nextDistance = node.distance + calculateDistance(
             node.airport.coordinates,
             nextNode.airport.coordinates
           );
 
-          if (distance < nextNode.distance) {
-            nextNode.distance = distance;
+          if (nextDistance < nextNode.distance) {
+            nextNode.distance = nextDistance;
             nextNode.prev = node;
             nextNode.hops = node.hops + 1;
           }
