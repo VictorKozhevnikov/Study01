@@ -1,41 +1,23 @@
-import rawFlights from "../../datasets-raw/flights.json";
-import rawAirports from "../../datasets-raw/airports.json";
-import {
-  Coordinates,
-  calculateCoordinatesDistance,
-} from "./calculateCoordinatesDistance";
+import { Coordinates } from "./calculateCoordinatesDistance";
 
-interface ShortestPathRequest {
+export interface ShortestPathRequest {
   from: string;
   to: string;
   maxHops: number;
 }
 
-type IATACode = string;
+export type IATACode = string;
 
-interface RawAirport {
-  iata_code: IATACode;
-  _geoloc: {
-    lng: number;
-    lat: number;
-  };
-}
-
-interface Airport {
+export interface Airport {
   code: IATACode;
   coordinates: Coordinates;
 }
 
-interface AirportMap {
+export interface AirportMap {
   [key: IATACode]: Airport;
 }
 
-interface RawFlight {
-  "source airport": IATACode;
-  "destination apirport": IATACode;
-}
-
-interface FlightMap {
+export interface FlightMap {
   [key: IATACode]: IATACode[];
 }
 
@@ -51,43 +33,42 @@ interface NodeMap {
   [key: IATACode]: Node;
 }
 
-function tracePath(node: Node) {
-  const length = node.hops + 1;
-  const path = new Array(length);
-  for (let i = length - 1; i >= 0 && node.prev !== null; ++i) {
-    path[i] = node;
-    node = node.prev;
-  }
-  return path;
+interface Section {
+  from: IATACode;
+  to: IATACode;
+}
+interface Path {
+  sections: Section[];
 }
 
-export function findShortestPath({ from, to }: ShortestPathRequest) {
-  const airports: AirportMap = {};
-  rawAirports.forEach((item) => {
-    airports[item.iata_code] = {
-      code: item.iata_code,
-      coordinates: {
-        latitude: item._geoloc.lat,
-        longitude: item._geoloc.lng,
-      },
+function tracePath(node: Node): Path {
+  const length = node.hops;
+  const sections = new Array<Section>(length);
+  for (let i = length - 1; i >= 0 && node.prev !== null; --i) {
+    sections[i] = {
+      from: node.prev.code,
+      to: node.code,
     };
-  });
+    node = node.prev;
+  }
+  return { sections };
+}
 
-  const flightMap: FlightMap = {};
-  rawFlights.forEach((item: RawFlight) => {
-    const source = item["source airport"];
-    const destination = item["destination apirport"];
+export type DistanceFunction = (
+  starting: Coordinates,
+  destination: Coordinates
+) => number;
+interface ShortestPathContext {
+  airports: AirportMap;
+  flightMap: FlightMap;
+  calculateDistance: DistanceFunction;
+}
 
-    let connections = flightMap[source];
-    if (!connections) {
-      connections = new Array<IATACode>();
-      flightMap[source] = connections;
-    }
-
-    if (!connections.includes(destination)) {
-      connections.push(destination);
-    }
-  });
+export function findShortestPath(
+  { from, to, maxHops }: ShortestPathRequest,
+  context: ShortestPathContext
+): Path | null {
+  const { airports, flightMap, calculateDistance } = context;
 
   const queue = new Array<Node>();
   const visitedNodes: NodeMap = {};
@@ -107,45 +88,50 @@ export function findShortestPath({ from, to }: ShortestPathRequest) {
     const node = queue[queue.length - 1];
     queue.pop();
 
-    const connections = flightMap[node.code];
-    connections.forEach((nextCode) => {
-      if (visitedNodes[nextCode]) {
-        return;
-      }
-
-      let nextNode = discoveredNodes[nextCode];
-      if (!nextNode) {
-        const nextAirport = airports[nextCode];
-        nextNode = {
-          code: nextCode,
-          airport: nextAirport,
-          prev: node,
-          distance: calculateCoordinatesDistance(
-            node.airport.coordinates,
-            nextAirport.coordinates
-          ),
-          hops: node.hops + 1,
-        };
-
-        discoveredNodes[nextCode] = nextNode;
-      } else {
-        const distance = calculateCoordinatesDistance(
-          node.airport.coordinates,
-          nextNode.airport.coordinates
-        );
-
-        if (distance < nextNode.distance) {
-          nextNode.distance = distance;
-          nextNode.prev = node;
-          nextNode.hops = node.hops + 1;
+    if (node.hops < maxHops) {
+      // explore connections
+      const connections = flightMap[node.code];
+      connections.forEach((nextCode) => {
+        if (visitedNodes[nextCode]) {
+          return;
         }
-      }
-    });
+
+        let nextNode = discoveredNodes[nextCode];
+        if (!nextNode) {
+          const nextAirport = airports[nextCode];
+          nextNode = {
+            code: nextCode,
+            airport: nextAirport,
+            prev: node,
+            distance: calculateDistance(
+              node.airport.coordinates,
+              nextAirport.coordinates
+            ),
+            hops: node.hops + 1,
+          };
+
+          discoveredNodes[nextCode] = nextNode;
+          queue.unshift(nextNode);
+        } else {
+          const distance = calculateDistance(
+            node.airport.coordinates,
+            nextNode.airport.coordinates
+          );
+
+          if (distance < nextNode.distance) {
+            nextNode.distance = distance;
+            nextNode.prev = node;
+            nextNode.hops = node.hops + 1;
+          }
+        }
+      });
+    }
 
     visitedNodes[node.code] = node;
     if (node.code === to) {
       return tracePath(node);
     }
   }
-  return [];
+  
+  return null;
 }
